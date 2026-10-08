@@ -1,0 +1,25 @@
+# The site is served by GitHub Pages from the gh-pages branch.
+# Every push to main copies main to gh-pages, so new games show up on the site.
+name: Publish site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-site
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Copy main to gh-pages
+        run: git push --force origin HEAD:refs/heads/gh-pages

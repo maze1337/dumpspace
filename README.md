@@ -40,7 +40,7 @@ Then open http://localhost:8080. Opening `index.html` straight from disk does no
 
    `--engine` is one of `Unreal-Engine-5`, `Unreal-Engine-4`, `Unreal-Engine-3` or `Unity`. Optional: `--uploader "Your name"`, `--link https://...`, and `--keep-json` to also keep uncompressed copies.
 
-3. Commit and push the `games` folder.
+3. Commit and push the `games` folder. The site picks up the new game within a minute or two.
 
 The tool gzips the files into `games/<engine>/<game>/` and adds the game to `games/GameList.json`. Running `add` again with the same engine and name updates the game and keeps its link.
 
@@ -59,9 +59,11 @@ node tools/games.mjs remove "Sample Project"
 
 ## Publish with GitHub Pages
 
-1. Push this repository to GitHub.
-2. Open **Settings → Pages**, choose **Deploy from a branch**, then the `main` branch and the `/ (root)` folder.
-3. The site appears at `https://<your-user>.github.io/<repository>/` after a minute or two. For this repository that is https://maze1337.github.io/dumpspace/.
+This repository is already published at **https://maze1337.github.io/dumpspace/**.
+
+GitHub Pages serves the site from the `gh-pages` branch. The workflow in `.github/workflows/publish.yml` copies `main` to `gh-pages` on every push, so you only ever work on `main`: add a game, commit, push, and the site updates a minute later.
+
+To publish a copy of this project somewhere else, push it to a new repository and push `main` to a `gh-pages` branch as well (`git push origin main:gh-pages`), or open **Settings → Pages** and choose the `main` branch and the `/ (root)` folder.
 
 GitHub Pages is free for public repositories. Private repositories need a paid GitHub plan for Pages, and the published site is still reachable by anyone with the link unless you use GitHub Enterprise Cloud.
 
