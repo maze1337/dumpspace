@@ -42,7 +42,7 @@ export class GameShell {
       brand(),
       h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'),
       h('a', { class: 'crumb-game', href: href({ hash: info.hash }) }, info.name),
-      h('span', { class: 'engine-tag' }, info.local ? 'Local' : engineShort(info.engine)),
+      (this.engineTag = h('span', { class: 'engine-tag' }, info.local ? (info.engineHint ? engineShort(info.engineHint) : 'Local') : engineShort(info.engine))),
       h('div', { class: 'topbar-spacer' }),
       this.searchBtn,
       baseToggle(ctx),
@@ -73,6 +73,7 @@ export class GameShell {
       if (this.route !== route) return;
       if (!this.model) {
         this.model = model;
+        if (this.info.local && model.engine) this.engineTag.textContent = engineShort(model.engine);
         this.renderTabs();
         this.searchBtn.disabled = false;
       }

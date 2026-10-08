@@ -2,6 +2,7 @@
 import { CONFIG } from './config.js';
 import {
   unwrapFile, entryOf, readTypeMeta, parseTypeMembers, parseEnum, parseFunctions, toNum,
+  parseDumperFolder, isDumperBackup, detectEngine,
 } from './format.js';
 
 export const FILES = ['ClassesInfo', 'StructsInfo', 'FunctionsInfo', 'EnumsInfo', 'OffsetsInfo'];
@@ -26,6 +27,7 @@ function normalizeInfo(g, extra = {}) {
       ? { name: String(g.uploader.name || ''), link: String(g.uploader.link || '') }
       : null,
     counts: g.counts && typeof g.counts === 'object' ? g.counts : null,
+    engineVersion: g.engineVersion ? String(g.engineVersion) : null,
     sample: !!g.sample,
     local: false,
     ...extra,
@@ -135,6 +137,7 @@ function uniqueKey(map, name) {
 export function buildModel(info, files) {
   const model = {
     info,
+    engine: info.local ? info.engineHint || detectEngine(files) : info.engine,
     version: 0,
     updatedAt: 0,
     credit: null,
@@ -246,31 +249,49 @@ export function loadGame(hash, onProgress = () => {}) {
 
 const FILE_RE = /^(ClassesInfo|StructsInfo|FunctionsInfo|EnumsInfo|OffsetsInfo)\.json(\.gz)?$/i;
 
-/** Register dump files picked or dropped by the user. Returns the new game info, or null. */
-export function addLocalGame(fileList) {
-  const picked = {};
-  let label = '';
+/**
+ * Register dump files picked or dropped by the user. Files are grouped by the folder they
+ * sit in, so a whole Dumper-7 output folder (or several) works: each "Dumpspace" folder
+ * becomes one game, named after the Dumper-7 folder above it. Returns the new game infos.
+ */
+export function addLocalGames(fileList) {
+  const groups = new Map();
   for (const file of fileList) {
     const m = FILE_RE.exec(file.name);
     if (!m) continue;
+    const parts = (file.webkitRelativePath || '').split('/').filter(Boolean).slice(0, -1);
+    const dir = parts.join('/');
+    let group = groups.get(dir);
+    if (!group) groups.set(dir, (group = { parts, picked: {} }));
     const key = FILES.find((k) => k.toLowerCase() === m[1].toLowerCase());
-    if (!picked[key] || !m[2]) picked[key] = file;
-    if (!label && file.webkitRelativePath) {
-      const parts = file.webkitRelativePath.split('/');
-      const dir = parts[parts.length - 2];
-      label = dir && dir.toLowerCase() === 'dumpspace' && parts.length > 2 ? parts[parts.length - 3] : dir || '';
-    }
+    if (!group.picked[key] || !m[2]) group.picked[key] = file;
   }
-  if (!Object.keys(picked).length) return null;
-  localCount += 1;
-  const hash = `local-${localCount}`;
-  const info = normalizeInfo(
-    { hash, name: label || `Local dump ${localCount}`, engine: 'Local', location: '', uploaded: Date.now() },
-    { local: true, fileCount: Object.keys(picked).length },
-  );
-  games.set(hash, info);
-  localSources.set(hash, picked);
-  return info;
+  let list = [...groups.values()].map((group) => {
+    const last = group.parts[group.parts.length - 1] || '';
+    const folder = last.toLowerCase() === 'dumpspace' && group.parts.length > 1 ? group.parts[group.parts.length - 2] : last;
+    return { ...group, folder, parsed: parseDumperFolder(folder), backup: isDumperBackup(folder) };
+  });
+  // Dumper-7 keeps old dumps as "<folder>_OLD"; skip those when newer dumps came along.
+  if (list.some((g) => !g.backup)) list = list.filter((g) => !g.backup);
+  list.sort((a, b) => a.folder.localeCompare(b.folder));
+
+  return list.map((group) => {
+    localCount += 1;
+    const hash = `local-${localCount}`;
+    const name = (group.parsed && group.parsed.game) || group.folder || `Local dump ${localCount}`;
+    const info = normalizeInfo(
+      { hash, name, engine: 'Local', location: '', uploaded: Date.now() },
+      {
+        local: true,
+        fileCount: Object.keys(group.picked).length,
+        engineHint: group.parsed ? group.parsed.engine : null,
+        engineVersion: group.parsed ? group.parsed.shortVersion || group.parsed.version : null,
+      },
+    );
+    games.set(hash, info);
+    localSources.set(hash, group.picked);
+    return info;
+  });
 }
 
 // ---------------------------------------------------------------- lookups

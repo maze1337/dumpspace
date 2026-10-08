@@ -16,7 +16,7 @@ It reads the Dumpspace JSON format that [Dumper-7](https://github.com/Encryqed/D
 - **Global offsets** such as `OFFSET_GWORLD` and `OFFSET_GOBJECTS`.
 - **Search everything** with `/` or `Ctrl+K`: types, members, functions and enum values. Write `UWorld::Owning` to search inside one type.
 - **Hex or decimal** for every offset and size.
-- **Open dumps from your computer** without adding them to the site: use the buttons on the home page or drop the files on the page. They are read in the browser and never uploaded.
+- **Open dumps from your computer** without adding them to the site: pick a Dumper-7 game folder or the whole `C:\Dumper-7` folder on the home page, or drop it on the page. Game names, engines and versions come from the folder names. The files are read in the browser and never uploaded.
 - Links to every type and member, light and dark themes, and a layout that works on phones.
 
 ## Run it locally
@@ -31,18 +31,20 @@ Then open http://localhost:8080. Opening `index.html` straight from disk does no
 
 ## Add a game
 
-1. Dump the game with Dumper-7 or UEDumper. Dumper-7 writes the five JSON files into a folder named `Dumpspace` inside its output folder.
-2. Add the dump to the site:
+1. Dump the game with Dumper-7. It writes everything for one game into a folder named after the engine version and the game, for example `C:\Dumper-7\5.3.2-29314046+++UE5+Release-5.3-MyGame`.
+2. Add that folder to the site:
 
    ```bash
-   node tools/games.mjs add "C:\Dumper-7\5.3.2-MyGame\Dumpspace" --engine Unreal-Engine-5 --name "My Game"
+   node tools/games.mjs add "C:\Dumper-7\5.3.2-29314046+++UE5+Release-5.3-MyGame"
    ```
 
-   `--engine` is one of `Unreal-Engine-5`, `Unreal-Engine-4`, `Unreal-Engine-3` or `Unity`. Optional: `--uploader "Your name"`, `--link https://...`, and `--keep-json` to also keep uncompressed copies.
+   The game name (`MyGame`), the engine (`UE5`) and the engine version (`5.3.2`) come from the folder name. To add every game Dumper-7 has dumped in one go, point at the whole folder: `node tools/games.mjs add C:\Dumper-7`. Dumper-7's `_OLD` backup folders are skipped.
 
-3. Commit and push the `games` folder. The site picks up the new game within a minute or two.
+   The tool also takes the `Dumpspace` folder on its own, or any folder with the five JSON files, for example from UEDumper. When the folder name does not say which engine it is, the tool reads it from the dump (Unreal Engine 5 stores `FVector` as doubles, Unreal Engine 4 as floats). Optional flags: `--name "My Game"` and `--engine Unreal-Engine-5` to override what it found, `--uploader "Your name"`, `--link https://...`, and `--keep-json` to also keep uncompressed copies.
 
-The tool gzips the files into `games/<engine>/<game>/` and adds the game to `games/GameList.json`. Running `add` again with the same engine and name updates the game and keeps its link.
+3. Commit and push. The site picks up the new game within a minute or two.
+
+The tool gzips the files into `games/<engine>/<game>/` and adds the game to `games/GameList.json`. Running `add` again for the same game updates it and keeps its link.
 
 Other commands:
 

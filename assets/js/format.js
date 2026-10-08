@@ -51,7 +51,8 @@ export function typeToString(tr) {
 
 /** Split a type into tokens; tokens with `ref` can link to a type definition. */
 export function typeTokens(tr, out = []) {
-  out.push({ t: tr.name, ref: tr.kind !== 'D' ? tr.name : null, kind: tr.kind });
+  const linkable = tr.kind === 'C' || tr.kind === 'S' || tr.kind === 'E';
+  out.push({ t: tr.name, ref: linkable ? tr.name : null, kind: linkable ? tr.kind : 'D' });
   if (tr.subs.length) {
     out.push({ t: '<' });
     tr.subs.forEach((s, i) => {
@@ -353,6 +354,76 @@ export function functionsToCpp(owner, fns) {
   return out;
 }
 
+// ---------------------------------------------------------------- Dumper-7
+
+const ENGINE_BY_MAJOR = { 3: 'Unreal-Engine-3', 4: 'Unreal-Engine-4', 5: 'Unreal-Engine-5' };
+const BACKUP_SUFFIX = /_(OLD|\d{9,})$/i;
+
+/** Dumper-7 keeps the previous dump of a game as "<folder>_OLD" or "<folder>_<timestamp>". */
+export function isDumperBackup(folder) {
+  return BACKUP_SUFFIX.test(String(folder || ''));
+}
+
+/**
+ * Dumper-7 names each output folder "<engine version>-<game name>",
+ * for example "5.3.2-29314046+++UE5+Release-5.3-MyGame".
+ * Returns { game, version, shortVersion, engine } or null when the name does not look like that.
+ */
+export function parseDumperFolder(folder) {
+  if (!folder) return null;
+  const clean = String(folder).replace(BACKUP_SUFFIX, '');
+  const i = clean.lastIndexOf('-');
+  if (i <= 0 || i === clean.length - 1) return null;
+  const version = clean.slice(0, i);
+  const game = clean.slice(i + 1).trim();
+  if (!game || (!/^\d+\.\d+/.test(version) && !/\+UE\d\+|\+\+|Release-/i.test(version))) return null;
+  const major = /^(\d+)\.\d+/.exec(version) || /\+UE(\d)\+/i.exec(version);
+  const short = /^(\d+\.\d+(?:\.\d+)?)/.exec(version);
+  return {
+    game,
+    version,
+    shortVersion: short ? short[1] : null,
+    engine: major ? ENGINE_BY_MAJOR[major[1]] || null : null,
+  };
+}
+
+/**
+ * Work out the engine from the dump itself, for dumps whose folder name says nothing.
+ * Unreal Engine 5 stores FVector as doubles, Unreal Engine 4 as floats.
+ */
+export function detectEngine(files) {
+  const classes = unwrapFile(files.ClassesInfo).data;
+  const structs = unwrapFile(files.StructsInfo).data;
+  const offsets = unwrapFile(files.OffsetsInfo).data;
+  const offsetNames = new Set(offsets.map((o) => (Array.isArray(o) ? String(o[0]) : (entryOf(o) || [''])[0])));
+  let unreal = offsetNames.has('OFFSET_GOBJECTS') || offsetNames.has('OFFSET_GNAMES');
+  let unity = false;
+  for (const item of classes) {
+    const e = entryOf(item);
+    if (!e) continue;
+    if (e[0] === 'UObject') unreal = true;
+    if (!unity && Array.isArray(e[1])) {
+      const meta = e[1][0] && e[1][0].__InheritInfo;
+      if (e[0] === 'MonoBehaviour' || (Array.isArray(meta) && meta.includes('MonoBehaviour'))) unity = true;
+    }
+    if (unreal) break;
+  }
+  if (!unreal) return unity ? 'Unity' : null;
+  for (const item of structs) {
+    const e = entryOf(item);
+    if (!e || e[0] !== 'FVector' || !Array.isArray(e[1])) continue;
+    for (const m of e[1]) {
+      const me = entryOf(m);
+      if (me && me[0] === 'X' && Array.isArray(me[1])) {
+        const t = parseType(me[1][0]);
+        if (t.name === 'double') return 'Unreal-Engine-5';
+        if (t.name === 'float') return 'Unreal-Engine-4';
+      }
+    }
+  }
+  return 'Unreal-Engine';
+}
+
 // ---------------------------------------------------------------- misc
 
 export function plural(n, one, many = one + 's') {
@@ -377,12 +448,13 @@ export function engineLabel(engine) {
     'Unreal-Engine-5': 'Unreal Engine 5',
     'Unreal-Engine-4': 'Unreal Engine 4',
     'Unreal-Engine-3': 'Unreal Engine 3',
+    'Unreal-Engine': 'Unreal Engine',
     Unity: 'Unity',
   };
   return map[engine] || String(engine || 'Unknown engine').replace(/-/g, ' ');
 }
 
 export function engineShort(engine) {
-  const map = { 'Unreal-Engine-5': 'UE5', 'Unreal-Engine-4': 'UE4', 'Unreal-Engine-3': 'UE3', Unity: 'Unity' };
+  const map = { 'Unreal-Engine-5': 'UE5', 'Unreal-Engine-4': 'UE4', 'Unreal-Engine-3': 'UE3', 'Unreal-Engine': 'UE', Unity: 'Unity' };
   return map[engine] || String(engine || '?').slice(0, 6);
 }

@@ -30,11 +30,13 @@ function gameRow(g) {
   if (g.local) badges.push(h('span', { class: 'badge badge-local' }, 'Local'));
   const when = g.uploaded ? relativeTime(g.uploaded) : '';
   return h('li', null, h('a', { class: 'game-row', href: href({ hash: g.hash }) },
-    h('span', { class: 'game-mono', 'aria-hidden': 'true' }, h('span', { class: 'mono-letters' }, initials(g.name)), h('span', { class: 'mono-engine' }, g.local ? 'Local' : engineShort(g.engine))),
+    h('span', { class: 'game-mono', 'aria-hidden': 'true' }, h('span', { class: 'mono-letters' }, initials(g.name)), h('span', { class: 'mono-engine' }, g.local ? (g.engineHint ? engineShort(g.engineHint) : 'Local') : engineShort(g.engine))),
     h('span', { class: 'game-main' },
       h('span', { class: 'game-name' }, h('span', null, g.name), badges),
       h('span', { class: 'game-sub' },
-        h('span', null, g.local ? `Opened from this computer, ${plural(g.fileCount || 0, 'file')}` : engineLabel(g.engine)),
+        h('span', null, g.local
+          ? `${g.engineHint ? `${engineLabel(g.engineHint)}, opened` : 'Opened'} from this computer, ${plural(g.fileCount || 0, 'file')}`
+          : engineLabel(g.engine) + (g.engineVersion ? ` ${g.engineVersion}` : '')),
         countsText(g.counts) ? h('span', null, countsText(g.counts)) : null)),
     h('span', { class: 'game-meta' },
       when ? h('span', null, g.local ? `Opened ${when}` : `Updated ${when}`) : null,
@@ -105,10 +107,12 @@ export async function renderHome(root, ctx) {
         h('h1', { class: 'intro-title' }, CONFIG.tagline),
         h('p', { class: 'intro-text' }, 'Browse the classes, structs, functions, enums and offsets in SDK dumps of your own games. Every type shows a map of where its members sit in memory, which bytes it inherits and which bytes nothing describes.'),
         h('div', { class: 'intro-actions' },
-          h('button', { type: 'button', class: 'btn btn-primary', onclick: () => files.click() }, icon('file', 18), 'Open dump files'),
-          canPickFolder ? h('button', { type: 'button', class: 'btn', onclick: () => folder.click() }, icon('folder', 18), 'Open dump folder') : null,
+          canPickFolder ? h('button', { type: 'button', class: 'btn btn-primary', onclick: () => folder.click() }, icon('folder', 18), 'Open Dumper-7 folder') : null,
+          h('button', { type: 'button', class: canPickFolder ? 'btn' : 'btn btn-primary', onclick: () => files.click() }, icon('file', 18), 'Open dump files'),
           files, folder),
-        h('p', { class: 'intro-note' }, 'Pick the five files from a Dumper-7 or UEDumper "Dumpspace" folder, or drop them on this page. They are read in this browser and never uploaded.')),
+        h('p', { class: 'intro-note' }, canPickFolder
+          ? 'Pick a game\'s folder from Dumper-7 (for example C:\\Dumper-7\\5.3.2-…-MyGame), the whole C:\\Dumper-7 folder, or drop either on this page. The game name and engine come from the folder. Your browser may say it is uploading; the files stay on your computer and are only read here.'
+          : 'Pick the five files from a Dumper-7 or UEDumper Dumpspace folder. They are read on this device and never uploaded.')),
       gamesSection),
     h('footer', { class: 'footer' },
       h('p', null, `${CONFIG.siteName} reads the Dumpspace JSON format (ClassesInfo, StructsInfo, FunctionsInfo, EnumsInfo and OffsetsInfo).`),

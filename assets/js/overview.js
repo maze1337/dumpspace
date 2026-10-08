@@ -37,7 +37,9 @@ export function renderOverview(host, model, ctx) {
   const info = model.info;
   const base = ctx.prefs.base;
   const updated = model.updatedAt || info.uploaded;
-  const facts = [['Engine', info.local ? 'Opened from this computer' : engineLabel(info.engine)]];
+  const engineText = model.engine && model.engine !== 'Local' ? engineLabel(model.engine) : 'Unknown';
+  const facts = [['Engine', info.local ? `${engineText}, opened from this computer` : engineText]];
+  if (info.engineVersion) facts.push(['Engine version', info.engineVersion]);
   if (updated) facts.push(['Updated', dateText(updated)]);
   if (model.credit && model.credit.dumper_used) facts.push(['Dumped with', externalLink(String(model.credit.dumper_used), model.credit.dumper_link)]);
   if (info.uploader && info.uploader.name) facts.push(['Added by', externalLink(info.uploader.name, info.uploader.link)]);

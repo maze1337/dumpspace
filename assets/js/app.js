@@ -1,6 +1,6 @@
 // Entry point: routing, shared preferences, keyboard shortcuts and drag and drop.
 import { h, store, toast } from './dom.js';
-import { loadGameList, gameInfo, addLocalGame } from './data.js';
+import { loadGameList, gameInfo, addLocalGames } from './data.js';
 import { parse, build } from './routes.js';
 import { GameShell } from './game.js';
 import { renderHome } from './home.js';
@@ -84,12 +84,18 @@ async function render() {
 }
 
 function openLocal(files) {
-  const info = addLocalGame(files);
-  if (!info) {
-    toast('No dump files found. Choose ClassesInfo.json, StructsInfo.json, FunctionsInfo.json, EnumsInfo.json and OffsetsInfo.json, or their .json.gz versions.');
+  const added = addLocalGames(files);
+  if (!added.length) {
+    toast('No dump files found. Choose a Dumper-7 output folder, its Dumpspace folder, or the files ClassesInfo, StructsInfo, FunctionsInfo, EnumsInfo and OffsetsInfo (.json or .json.gz).');
     return;
   }
-  navigate(build({ hash: info.hash }));
+  if (added.length === 1) {
+    navigate(build({ hash: added[0].hash }));
+    return;
+  }
+  toast(`Opened ${added.length} dumps: ${added.map((g) => g.name).join(', ')}`);
+  if (parse(current).page === 'home') render();
+  else navigate('/');
 }
 
 // "/" or Ctrl+K opens search on a game page.

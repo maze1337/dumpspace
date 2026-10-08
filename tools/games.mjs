@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 // Add, update, list and remove games. Needs Node 18 or newer, no packages.
 //
-//   node tools/games.mjs add <dump-folder> --engine Unreal-Engine-5 [--name "My Game"] [--uploader "Me"] [--link URL] [--keep-json]
+//   node tools/games.mjs add <folder> [--engine Unreal-Engine-5] [--name "My Game"] [--uploader "Me"] [--link URL] [--keep-json]
 //   node tools/games.mjs list
 //   node tools/games.mjs remove <hash or name>
 //
-// <dump-folder> is the folder with ClassesInfo, StructsInfo, FunctionsInfo, EnumsInfo and
-// OffsetsInfo (.json or .json.gz), for example the "Dumpspace" folder Dumper-7 writes, or its parent.
+// <folder> can be:
+//   - a game folder from Dumper-7, for example C:\Dumper-7\5.3.2-29314046+++UE5+Release-5.3-MyGame
+//   - the whole Dumper-7 folder (C:\Dumper-7), which adds every game in it and skips the _OLD backups
+//   - any folder with ClassesInfo, StructsInfo, FunctionsInfo, EnumsInfo and OffsetsInfo (.json or .json.gz)
+// The game name, engine (UE4 or UE5) and engine version come from Dumper-7's folder name. When the
+// folder name says nothing, the engine is read from the dump itself. --name and --engine override both.
 // Adding a game with the same engine and name again updates it in place and keeps its hash.
 
 import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises';
@@ -14,6 +18,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseDumperFolder, isDumperBackup, detectEngine } from '../assets/js/format.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GAMES = path.join(ROOT, 'games');
@@ -67,18 +72,40 @@ function hashFor(engine, location) {
 }
 
 async function findDumpFile(dir, name) {
-  for (const d of [dir, path.join(dir, 'Dumpspace')]) {
-    let entries;
-    try {
-      entries = await readdir(d);
-    } catch {
-      continue;
-    }
-    const lower = name.toLowerCase();
-    const hit = entries.find((e) => e.toLowerCase() === `${lower}.json`) || entries.find((e) => e.toLowerCase() === `${lower}.json.gz`);
-    if (hit) return path.join(d, hit);
+  let entries;
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return null;
   }
-  return null;
+  const lower = name.toLowerCase();
+  const hit = entries.find((e) => e.toLowerCase() === `${lower}.json`) || entries.find((e) => e.toLowerCase() === `${lower}.json.gz`);
+  return hit ? path.join(dir, hit) : null;
+}
+
+async function hasDump(dir) {
+  for (const f of FILES) if (await findDumpFile(dir, f)) return true;
+  return false;
+}
+
+/** Folders with dump files: the folder itself, its Dumpspace folder, or every game folder inside it. */
+async function discover(dir) {
+  if (await hasDump(dir)) return [dir];
+  if (await hasDump(path.join(dir, 'Dumpspace'))) return [path.join(dir, 'Dumpspace')];
+  let children = [];
+  try {
+    children = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const found = [];
+  for (const child of children.filter((c) => c.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (isDumperBackup(child.name)) continue;
+    const sub = path.join(dir, child.name);
+    if (await hasDump(path.join(sub, 'Dumpspace'))) found.push(path.join(sub, 'Dumpspace'));
+    else if (await hasDump(sub)) found.push(sub);
+  }
+  return found;
 }
 
 async function loadJson(file) {
@@ -107,35 +134,33 @@ function inside(parent, child) {
   return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
-async function add(args) {
-  const dirArg = args._[1];
-  if (!dirArg) fail('Pass the dump folder: node tools/games.mjs add <dump-folder> --engine Unreal-Engine-5');
-  const dir = path.resolve(dirArg);
-  const engine = typeof args.engine === 'string' ? args.engine : '';
-  if (!engine) fail(`Pass --engine with one of: ${ENGINES.join(', ')}`);
-  if (!ENGINES.includes(engine)) console.warn(`Note: "${engine}" is not one of ${ENGINES.join(', ')}. It will still work.`);
-  if (/[\\/]|\.\./.test(engine)) fail('--engine cannot contain slashes or "..".');
+async function addOne(dumpDir, args, single) {
+  const gameFolder = path.basename(dumpDir).toLowerCase() === 'dumpspace' ? path.dirname(dumpDir) : dumpDir;
+  const parsed = parseDumperFolder(path.basename(gameFolder));
 
-  let name = typeof args.name === 'string' ? args.name.trim() : '';
-  if (!name) {
-    const base = path.basename(dir);
-    name = base.toLowerCase() === 'dumpspace' ? path.basename(path.dirname(dir)) : base;
+  const files = {};
+  for (const f of FILES) {
+    const src = await findDumpFile(dumpDir, f);
+    files[f] = src ? await loadJson(src) : null;
   }
-  const location = typeof args.location === 'string' ? slug(args.location) : slug(name);
+
+  const name = (single && typeof args.name === 'string' && args.name.trim()) || (parsed && parsed.game) || path.basename(gameFolder);
+  let engine = typeof args.engine === 'string' ? args.engine : (parsed && parsed.engine) || detectEngine(files);
+  if (!engine) fail(`Could not tell which engine ${name} uses. Pass --engine with one of: ${ENGINES.join(', ')}`);
+  if (/[\\/]|\.\./.test(engine)) fail('--engine cannot contain slashes or "..".');
+  if (engine === 'Unreal-Engine') console.warn(`Note: could not tell UE4 from UE5 for ${name}. Pass --engine to choose.`);
+  else if (!ENGINES.includes(engine)) console.warn(`Note: "${engine}" is not one of ${ENGINES.join(', ')}. It will still work.`);
+
+  const location = single && typeof args.location === 'string' ? slug(args.location) : slug(name);
   const out = path.join(GAMES, engine, location);
   if (!inside(GAMES, out)) fail('The game folder would end up outside games/.');
 
-  const found = {};
-  for (const f of FILES) found[f] = await findDumpFile(dir, f);
-  if (!Object.values(found).some(Boolean)) fail(`No dump files in ${dir}. Expected ${FILES.map((f) => `${f}.json`).join(', ')}.`);
-
   await mkdir(out, { recursive: true });
-  console.log(`Adding ${name} to games/${engine}/${location}/`);
+  console.log(`Adding ${name} (${engine}${parsed && parsed.shortVersion ? ` ${parsed.shortVersion}` : ''}) to games/${engine}/${location}/`);
   const counts = {};
   for (const f of FILES) {
-    let json;
-    if (found[f]) json = await loadJson(found[f]);
-    else {
+    let json = files[f];
+    if (json == null) {
       console.warn(`  ${f}: not found, writing an empty file`);
       json = { data: [], updated_at: String(Date.now()), version: 10202 };
     }
@@ -162,6 +187,8 @@ async function add(args) {
       enums: counts.EnumsInfo, offsets: counts.OffsetsInfo,
     },
   };
+  const version = parsed && (parsed.shortVersion || parsed.version);
+  if (version) entry.engineVersion = version;
   if (args.sample) entry.sample = true;
   const i = list.games.findIndex((g) => g.hash === hash);
   if (i >= 0) {
@@ -175,10 +202,28 @@ async function add(args) {
   console.log(`Open it at index.html#/g/${hash}`);
 }
 
+async function add(args) {
+  const dirArg = args._[1];
+  if (!dirArg) fail('Pass a folder: node tools/games.mjs add "C:\\Dumper-7\\<version>-<game>"');
+  const dir = path.resolve(dirArg);
+  const dumps = await discover(dir);
+  if (!dumps.length) {
+    fail(`No dump files found in ${dir}. Point at a Dumper-7 game folder, its Dumpspace folder, or the whole Dumper-7 folder.`);
+  }
+  if (dumps.length > 1 && (typeof args.name === 'string' || typeof args.location === 'string')) {
+    fail(`Found ${dumps.length} games in ${dir}. --name and --location only work when adding one game.`);
+  }
+  if (dumps.length > 1) console.log(`Found ${dumps.length} games in ${dir}.\n`);
+  for (const d of dumps) {
+    await addOne(d, args, dumps.length === 1);
+    if (dumps.length > 1) console.log('');
+  }
+}
+
 async function listGames() {
   const list = await readList();
   if (!list.games.length) {
-    console.log('No games yet. Add one with: node tools/games.mjs add <dump-folder> --engine Unreal-Engine-5');
+    console.log('No games yet. Add one with: node tools/games.mjs add <Dumper-7 game folder>');
     return;
   }
   for (const g of list.games) console.log(`${g.hash}  ${String(g.engine).padEnd(16)} ${g.name}${g.sample ? '  (sample)' : ''}`);
@@ -212,7 +257,7 @@ else if (command === 'list') await listGames();
 else if (command === 'remove') await remove(args);
 else {
   console.log(`Usage:
-  node tools/games.mjs add <dump-folder> --engine Unreal-Engine-5 [--name "My Game"] [--uploader "Me"] [--link URL] [--keep-json]
+  node tools/games.mjs add <folder> [--engine Unreal-Engine-5] [--name "My Game"] [--uploader "Me"] [--link URL] [--keep-json]
   node tools/games.mjs list
   node tools/games.mjs remove <hash or name>
 
