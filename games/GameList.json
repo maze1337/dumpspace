@@ -1,0 +1,23 @@
+{
+  "games": [
+    {
+      "hash": "8d8134d9",
+      "name": "Sample Project",
+      "engine": "Unreal-Engine-5",
+      "location": "Sample-Project",
+      "uploaded": 1791421754295,
+      "uploader": {
+        "name": "Sample data",
+        "link": ""
+      },
+      "counts": {
+        "classes": 24,
+        "structs": 11,
+        "functions": 8,
+        "enums": 7,
+        "offsets": 6
+      },
+      "sample": true
+    }
+  ]
+}

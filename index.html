@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Offset Atlas</title>
+<meta name="description" content="Browse the classes, structs, functions, enums and offsets in SDK dumps of your own games.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6' y='3.5' width='12' height='17' rx='1.5' fill='%2310261d' stroke='%23e0b03c' stroke-width='1.6'/%3E%3Cpath d='M2.5 7H6M2.5 10.5H6M2.5 14H6M2.5 17.5H6M18 7h3.5M18 10.5h3.5M18 14h3.5M18 17.5h3.5' stroke='%23e0b03c' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..700&family=Schibsted+Grotesk:wght@400..700&display=swap">
+<link rel="stylesheet" href="assets/css/app.css">
+<script>
+  // Apply the saved theme before the first paint.
+  try {
+    var t = JSON.parse(localStorage.getItem('oa.theme'));
+    if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
+</head>
+<body>
+<div id="app">
+  <noscript><p style="padding:24px">This site needs JavaScript to read the dump files.</p></noscript>
+</div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

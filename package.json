@@ -1,0 +1,14 @@
+{
+  "name": "offset-atlas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A static website for browsing SDK dumps (Dumpspace JSON format) of your own games.",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "games": "node tools/games.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
